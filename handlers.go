@@ -4,10 +4,8 @@ import (
     "crypto/rand"
     "database/sql"
     "encoding/csv"
-    "encoding/json"
     "errors"
     "fmt"
-    "io"
     "net/http"
     "os"
     "path/filepath"
@@ -843,7 +841,6 @@ func (h *Handlers) ExportJSON(c *gin.Context) {
 func (h *Handlers) ExportYAML(c *gin.Context) {
     // Use JSON data and marshal to YAML
     // Reuse ExportJSON logic
-    w := gin.H{}
     // We'll call ExportJSON to populate w; not ideal but efficient reuse
     // Instead, call underlying logic
     // Query data

@@ -1,0 +1,13 @@
+# Ignorer le répertoire de données
+data/
+
+# Ignorer le répertoire Git
+.git/
+
+# Ignorer les fichiers de build et de développement local
+Makefile
+.dockerignore
+*.log
+
+# Ignorer les fichiers spécifiques à l'OS
+.DS_Store
