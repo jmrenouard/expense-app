@@ -28,7 +28,7 @@ clean: stop
 # Lancer les tests unitaires
 test-unit:
 	@echo "Running unit tests..."
-	go test -v ./...
+	go test -v .
 
 # Lancer les tests fonctionnels
 test-functional: build

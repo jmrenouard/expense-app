@@ -47,7 +47,7 @@ func main() {
         api.DELETE("/reports/:id", RequirePermission(db, PermReportsUpdateOwn), handlers.DeleteReport)
         api.GET("/reports", RequirePermission(db, PermReportsReadOwn), handlers.ListOwnReports)
         // Items
-        api.POST("/reports/:report_id/items", RequirePermission(db, PermReportsCreate), handlers.AddItem)
+        api.POST("/reports/:id/items", RequirePermission(db, PermReportsCreate), handlers.AddItem)
         api.PUT("/items/:id", RequirePermission(db, PermReportsUpdateOwn), handlers.UpdateItem)
         api.POST("/items/:id/receipt", RequirePermission(db, PermReportsUpdateOwn), handlers.UploadReceipt)
         api.GET("/items/:id/receipt", RequirePermission(db, PermReportsReadOwn), handlers.GetReceipt)
