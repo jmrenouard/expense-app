@@ -1,0 +1,32 @@
+[INFO] Super admin created with email admin@example.com and password admin
+[GIN-debug] [WARNING] Creating an Engine instance with the Logger and Recovery middleware already attached.
+
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+[GIN-debug] POST   /api/auth/login           --> main.(*Handlers).Login-fm (3 handlers)
+[GIN-debug] POST   /api/reports              --> main.(*Handlers).CreateReport-fm (5 handlers)
+[GIN-debug] POST   /api/reports/:id/submit   --> main.(*Handlers).SubmitReport-fm (5 handlers)
+[GIN-debug] DELETE /api/reports/:id          --> main.(*Handlers).DeleteReport-fm (5 handlers)
+[GIN-debug] GET    /api/reports              --> main.(*Handlers).ListOwnReports-fm (5 handlers)
+[GIN-debug] POST   /api/reports/:id/items    --> main.(*Handlers).AddItem-fm (5 handlers)
+[GIN-debug] PUT    /api/items/:id            --> main.(*Handlers).UpdateItem-fm (5 handlers)
+[GIN-debug] POST   /api/items/:id/receipt    --> main.(*Handlers).UploadReceipt-fm (5 handlers)
+[GIN-debug] GET    /api/items/:id/receipt    --> main.(*Handlers).GetReceipt-fm (5 handlers)
+[GIN-debug] GET    /api/admin/reports        --> main.(*Handlers).AdminListReports-fm (5 handlers)
+[GIN-debug] POST   /api/admin/reports/:id/approve --> main.(*Handlers).ApproveReport-fm (5 handlers)
+[GIN-debug] POST   /api/admin/reports/:id/reject --> main.(*Handlers).RejectReport-fm (5 handlers)
+[GIN-debug] GET    /api/admin/users          --> main.(*Handlers).ListUsers-fm (5 handlers)
+[GIN-debug] POST   /api/admin/users          --> main.(*Handlers).CreateUser-fm (5 handlers)
+[GIN-debug] GET    /api/admin/groups         --> main.(*Handlers).ListGroups-fm (5 handlers)
+[GIN-debug] POST   /api/admin/groups         --> main.(*Handlers).CreateGroup-fm (5 handlers)
+[GIN-debug] POST   /api/admin/groups/:id/permissions --> main.(*Handlers).AssignPermissions-fm (5 handlers)
+[GIN-debug] POST   /api/admin/users/:id/token --> main.(*Handlers).GenerateAPIToken-fm (5 handlers)
+[GIN-debug] GET    /api/admin/export/csv     --> main.(*Handlers).ExportCSV-fm (5 handlers)
+[GIN-debug] GET    /api/admin/export/json    --> main.(*Handlers).ExportJSON-fm (5 handlers)
+[GIN-debug] GET    /api/admin/export/yaml    --> main.(*Handlers).ExportYAML-fm (5 handlers)
+2025/08/29 20:45:37 Server listening on :8080
+[GIN-debug] [WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.
+Please check https://pkg.go.dev/github.com/gin-gonic/gin#readme-don-t-trust-all-proxies for details.
+[GIN-debug] Listening and serving HTTP on :8080

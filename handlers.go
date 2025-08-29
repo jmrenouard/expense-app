@@ -38,26 +38,26 @@ type LoginRequest struct {
 func (h *Handlers) Login(c *gin.Context) {
     var req LoginRequest
     if err := c.ShouldBindJSON(&req); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "invalid_json")})
         return
     }
     var user User
     err := h.db.QueryRow("SELECT id, email, password_hash, created_at FROM users WHERE email = ?", req.Email).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.CreatedAt)
     if errors.Is(err, sql.ErrNoRows) {
         // Avoid leaking whether the email exists
-        c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+        c.JSON(http.StatusUnauthorized, gin.H{"error": GetMsg(c, "invalid_credentials")})
         return
     } else if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "database_error")})
         return
     }
     if err := checkPassword(user.PasswordHash, req.Password); err != nil {
-        c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+        c.JSON(http.StatusUnauthorized, gin.H{"error": GetMsg(c, "invalid_credentials")})
         return
     }
     token, err := generateJWT(user.ID)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "failed_to_generate_token")})
         return
     }
     c.JSON(http.StatusOK, gin.H{"token": token, "user": gin.H{"id": user.ID, "email": user.Email}})
@@ -72,7 +72,7 @@ type CreateReportRequest struct {
 func (h *Handlers) CreateReport(c *gin.Context) {
     var req CreateReportRequest
     if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.Title) == "" {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "title is required"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "title_is_required")})
         return
     }
     // Get user ID from context
@@ -80,7 +80,7 @@ func (h *Handlers) CreateReport(c *gin.Context) {
     userID := userIDIfc.(int64)
     res, err := h.db.Exec("INSERT INTO expense_reports (user_id, title, status, created_at) VALUES (?, ?, ?, ?)", userID, req.Title, "draft", time.Now().UTC())
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create report"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "failed_to_create_report")})
         return
     }
     reportID, _ := res.LastInsertId()
@@ -91,7 +91,7 @@ func (h *Handlers) CreateReport(c *gin.Context) {
 func (h *Handlers) SubmitReport(c *gin.Context) {
     reportID, err := strconv.ParseInt(c.Param("id"), 10, 64)
     if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "invalid report id"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "invalid_report_id")})
         return
     }
     userIDIfc, _ := c.Get(ContextUserIDKey)
@@ -102,22 +102,22 @@ func (h *Handlers) SubmitReport(c *gin.Context) {
     err = h.db.QueryRow("SELECT id, user_id, status FROM expense_reports WHERE id = ?", reportID).Scan(&reportID, &ownerID, &status)
     if err != nil {
         if errors.Is(err, sql.ErrNoRows) {
-            c.JSON(http.StatusNotFound, gin.H{"error": "report not found"})
+            c.JSON(http.StatusNotFound, gin.H{"error": GetMsg(c, "report_not_found")})
         } else {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+            c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "database_error")})
         }
         return
     }
     if ownerID != userID {
-        c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+        c.JSON(http.StatusForbidden, gin.H{"error": GetMsg(c, "forbidden")})
         return
     }
     if status != "draft" {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "only draft reports can be submitted"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "only_draft_reports_can_be_submitted")})
         return
     }
     if _, err := h.db.Exec("UPDATE expense_reports SET status = ? WHERE id = ?", "submitted", reportID); err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to submit report"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "failed_to_submit_report")})
         return
     }
     c.JSON(http.StatusOK, gin.H{"id": reportID, "status": "submitted"})
@@ -127,7 +127,7 @@ func (h *Handlers) SubmitReport(c *gin.Context) {
 func (h *Handlers) DeleteReport(c *gin.Context) {
     reportID, err := strconv.ParseInt(c.Param("id"), 10, 64)
     if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "invalid report id"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "invalid_report_id")})
         return
     }
     userIDIfc, _ := c.Get(ContextUserIDKey)
@@ -138,22 +138,22 @@ func (h *Handlers) DeleteReport(c *gin.Context) {
     err = h.db.QueryRow("SELECT user_id, status FROM expense_reports WHERE id = ?", reportID).Scan(&ownerID, &status)
     if err != nil {
         if errors.Is(err, sql.ErrNoRows) {
-            c.JSON(http.StatusNotFound, gin.H{"error": "report not found"})
+            c.JSON(http.StatusNotFound, gin.H{"error": GetMsg(c, "report_not_found")})
         } else {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+            c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "database_error")})
         }
         return
     }
     if ownerID != userID {
-        c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+        c.JSON(http.StatusForbidden, gin.H{"error": GetMsg(c, "forbidden")})
         return
     }
     if status != "draft" {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "only draft reports can be deleted"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "only_draft_reports_can_be_deleted")})
         return
     }
     if _, err := h.db.Exec("DELETE FROM expense_reports WHERE id = ?", reportID); err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete report"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "failed_to_delete_report")})
         return
     }
     c.Status(http.StatusNoContent)
@@ -170,7 +170,7 @@ func (h *Handlers) ListOwnReports(c *gin.Context) {
         WHERE er.user_id = ?
         ORDER BY er.id ASC`, userID)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "database_error")})
         return
     }
     defer rows.Close()
@@ -203,7 +203,7 @@ func (h *Handlers) ListOwnReports(c *gin.Context) {
         var amtHT, amtTTC, vatRate sql.NullFloat64
         var receiptPath sql.NullString
         if err := rows.Scan(&reportID, &title, &status, &createdAt, &itemID, &desc, &expenseDate, &amtHT, &amtTTC, &vatRate, &receiptPath); err != nil {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+            c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "database_error")})
             return
         }
         rep, ok := reportMap[reportID]
@@ -240,14 +240,13 @@ type AddItemRequest struct {
     Description string  `json:"description"`
     ExpenseDate string  `json:"expense_date"` // YYYY-MM-DD
     AmountHT    float64 `json:"amount_ht"`
-    VATRate     float64 `json:"vat_rate"`
 }
 
 // AddItem adds an expense item to a report.
 func (h *Handlers) AddItem(c *gin.Context) {
     reportID, err := strconv.ParseInt(c.Param("id"), 10, 64)
     if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "invalid report id"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "invalid_report_id")})
         return
     }
     // Verify report belongs to user
@@ -257,53 +256,54 @@ func (h *Handlers) AddItem(c *gin.Context) {
     var status string
     if err := h.db.QueryRow("SELECT user_id, status FROM expense_reports WHERE id = ?", reportID).Scan(&ownerID, &status); err != nil {
         if errors.Is(err, sql.ErrNoRows) {
-            c.JSON(http.StatusNotFound, gin.H{"error": "report not found"})
+            c.JSON(http.StatusNotFound, gin.H{"error": GetMsg(c, "report_not_found")})
         } else {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+            c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "database_error")})
         }
         return
     }
     if ownerID != userID {
-        c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+        c.JSON(http.StatusForbidden, gin.H{"error": GetMsg(c, "forbidden")})
         return
     }
     if status != "draft" {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "items can only be added to draft reports"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "items_can_only_be_added_to_draft_reports")})
         return
     }
     var req AddItemRequest
     if err := c.ShouldBindJSON(&req); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "invalid_json")})
         return
     }
     if strings.TrimSpace(req.Description) == "" || req.ExpenseDate == "" {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "description and expense_date are required"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "description_and_expense_date_are_required")})
         return
     }
     expDate, err := time.Parse("2006-01-02", req.ExpenseDate)
     if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "invalid expense_date format"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "invalid_expense_date_format")})
         return
     }
-    amountTTC := req.AmountHT * (1 + req.VATRate)
+    const vatRate = 0.20
+    amountTTC := req.AmountHT * (1 + vatRate)
     res, err := h.db.Exec(
         `INSERT INTO expense_items (report_id, description, expense_date, amount_ht, amount_ttc, vat_rate, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        reportID, req.Description, expDate.Format("2006-01-02"), req.AmountHT, amountTTC, req.VATRate, time.Now().UTC(),
+        reportID, req.Description, expDate.Format("2006-01-02"), req.AmountHT, amountTTC, vatRate, time.Now().UTC(),
     )
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add item"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "failed_to_add_item")})
         return
     }
     itemID, _ := res.LastInsertId()
-    c.JSON(http.StatusCreated, gin.H{"id": itemID, "report_id": reportID, "description": req.Description, "expense_date": req.ExpenseDate, "amount_ht": req.AmountHT, "amount_ttc": amountTTC, "vat_rate": req.VATRate})
+    c.JSON(http.StatusCreated, gin.H{"id": itemID, "report_id": reportID, "description": req.Description, "expense_date": req.ExpenseDate, "amount_ht": req.AmountHT, "amount_ttc": amountTTC, "vat_rate": vatRate})
 }
 
 // UpdateItem updates an existing expense item. Only owner can update items in draft reports.
 func (h *Handlers) UpdateItem(c *gin.Context) {
     itemID, err := strconv.ParseInt(c.Param("id"), 10, 64)
     if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "invalid item id"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "invalid_item_id")})
         return
     }
     // Get item and its report owner and status
@@ -316,53 +316,54 @@ func (h *Handlers) UpdateItem(c *gin.Context) {
         WHERE ei.id = ?`, itemID)
     if err := row.Scan(&reportID, &ownerID, &reportStatus); err != nil {
         if errors.Is(err, sql.ErrNoRows) {
-            c.JSON(http.StatusNotFound, gin.H{"error": "item not found"})
+            c.JSON(http.StatusNotFound, gin.H{"error": GetMsg(c, "item_not_found")})
         } else {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+            c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "database_error")})
         }
         return
     }
     userIDIfc, _ := c.Get(ContextUserIDKey)
     userID := userIDIfc.(int64)
     if ownerID != userID {
-        c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+        c.JSON(http.StatusForbidden, gin.H{"error": GetMsg(c, "forbidden")})
         return
     }
     if reportStatus != "draft" {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "items can only be updated in draft reports"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "items_can_only_be_updated_in_draft_reports")})
         return
     }
     var req AddItemRequest
     if err := c.ShouldBindJSON(&req); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "invalid_json")})
         return
     }
     expDate, err := time.Parse("2006-01-02", req.ExpenseDate)
     if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "invalid expense_date"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "invalid_expense_date")})
         return
     }
-    amountTTC := req.AmountHT * (1 + req.VATRate)
+    const vatRate = 0.20
+    amountTTC := req.AmountHT * (1 + vatRate)
     _, err = h.db.Exec(`UPDATE expense_items SET description = ?, expense_date = ?, amount_ht = ?, amount_ttc = ?, vat_rate = ? WHERE id = ?`,
-        req.Description, expDate.Format("2006-01-02"), req.AmountHT, amountTTC, req.VATRate, itemID)
+        req.Description, expDate.Format("2006-01-02"), req.AmountHT, amountTTC, vatRate, itemID)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update item"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "failed_to_update_item")})
         return
     }
-    c.JSON(http.StatusOK, gin.H{"id": itemID, "report_id": reportID, "description": req.Description, "expense_date": req.ExpenseDate, "amount_ht": req.AmountHT, "amount_ttc": amountTTC, "vat_rate": req.VATRate})
+    c.JSON(http.StatusOK, gin.H{"id": itemID, "report_id": reportID, "description": req.Description, "expense_date": req.ExpenseDate, "amount_ht": req.AmountHT, "amount_ttc": amountTTC, "vat_rate": vatRate})
 }
 
 // UploadReceipt uploads or replaces the receipt attachment for an expense item.
 func (h *Handlers) UploadReceipt(c *gin.Context) {
     itemID, err := strconv.ParseInt(c.Param("id"), 10, 64)
     if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "invalid item id"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "invalid_item_id")})
         return
     }
     // Validate file
     file, err := c.FormFile("file")
     if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "file is required"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "file_is_required")})
         return
     }
     // Check ownership and report status
@@ -374,26 +375,26 @@ func (h *Handlers) UploadReceipt(c *gin.Context) {
         WHERE ei.id = ?`, itemID)
     if err := row.Scan(&ownerID, &reportStatus); err != nil {
         if errors.Is(err, sql.ErrNoRows) {
-            c.JSON(http.StatusNotFound, gin.H{"error": "item not found"})
+            c.JSON(http.StatusNotFound, gin.H{"error": GetMsg(c, "item_not_found")})
         } else {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+            c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "database_error")})
         }
         return
     }
     userIDIfc, _ := c.Get(ContextUserIDKey)
     userID := userIDIfc.(int64)
     if ownerID != userID {
-        c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+        c.JSON(http.StatusForbidden, gin.H{"error": GetMsg(c, "forbidden")})
         return
     }
     if reportStatus != "draft" {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "receipts can only be uploaded for draft reports"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "receipts_can_only_be_uploaded_for_draft_reports")})
         return
     }
     // Determine user-specific directory
     userDir := filepath.Join(h.datadir, fmt.Sprintf("%d", userID), "receipts")
     if err := os.MkdirAll(userDir, 0o755); err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create receipts directory"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "failed_to_create_receipts_directory")})
         return
     }
     // Determine file extension
@@ -403,12 +404,12 @@ func (h *Handlers) UploadReceipt(c *gin.Context) {
     destPath := filepath.Join(userDir, newName)
     // Save file
     if err := c.SaveUploadedFile(file, destPath); err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save file"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "failed_to_save_file")})
         return
     }
     // Update DB
     if _, err := h.db.Exec("UPDATE expense_items SET receipt_path = ? WHERE id = ?", newName, itemID); err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update item"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "failed_to_update_item")})
         return
     }
     c.JSON(http.StatusOK, gin.H{"id": itemID, "receipt_path": newName})
@@ -418,7 +419,7 @@ func (h *Handlers) UploadReceipt(c *gin.Context) {
 func (h *Handlers) GetReceipt(c *gin.Context) {
     itemID, err := strconv.ParseInt(c.Param("id"), 10, 64)
     if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "invalid item id"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "invalid_item_id")})
         return
     }
     // Retrieve item info
@@ -430,14 +431,14 @@ func (h *Handlers) GetReceipt(c *gin.Context) {
         WHERE ei.id = ?`, itemID)
     if err := row.Scan(&ownerID, &receiptName); err != nil {
         if errors.Is(err, sql.ErrNoRows) {
-            c.JSON(http.StatusNotFound, gin.H{"error": "item not found"})
+            c.JSON(http.StatusNotFound, gin.H{"error": GetMsg(c, "item_not_found")})
         } else {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+            c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "database_error")})
         }
         return
     }
     if !receiptName.Valid {
-        c.JSON(http.StatusNotFound, gin.H{"error": "receipt not uploaded"})
+        c.JSON(http.StatusNotFound, gin.H{"error": GetMsg(c, "receipt_not_uploaded")})
         return
     }
     userIDIfc, _ := c.Get(ContextUserIDKey)
@@ -446,11 +447,11 @@ func (h *Handlers) GetReceipt(c *gin.Context) {
     if ownerID != userID {
         hasAll, err := UserHasPermission(h.db, userID, PermReportsReadAll)
         if err != nil {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "permission check failed"})
+            c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "permission_check_failed")})
             return
         }
         if !hasAll {
-            c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+            c.JSON(http.StatusForbidden, gin.H{"error": GetMsg(c, "forbidden")})
             return
         }
     }
@@ -466,7 +467,7 @@ func (h *Handlers) AdminListReports(c *gin.Context) {
         JOIN users u ON u.id = er.user_id
         WHERE er.status != 'draft'`)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "database_error")})
         return
     }
     defer rows.Close()
@@ -482,7 +483,7 @@ func (h *Handlers) AdminListReports(c *gin.Context) {
     for rows.Next() {
         var r reportOut
         if err := rows.Scan(&r.ID, &r.UserID, &r.Title, &r.Status, &r.CreatedAt, &r.Email); err != nil {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+            c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "database_error")})
             return
         }
         reports = append(reports, r)
@@ -494,18 +495,18 @@ func (h *Handlers) AdminListReports(c *gin.Context) {
 func (h *Handlers) ApproveReport(c *gin.Context) {
     reportID, err := strconv.ParseInt(c.Param("id"), 10, 64)
     if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "invalid report id"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "invalid_report_id")})
         return
     }
     // Update status if submitted
     res, err := h.db.Exec(`UPDATE expense_reports SET status = 'approved' WHERE id = ? AND status = 'submitted'`, reportID)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "database_error")})
         return
     }
     count, _ := res.RowsAffected()
     if count == 0 {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "report not found or not in submitted state"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "report_not_found_or_not_in_submitted_state")})
         return
     }
     c.JSON(http.StatusOK, gin.H{"id": reportID, "status": "approved"})
@@ -515,17 +516,17 @@ func (h *Handlers) ApproveReport(c *gin.Context) {
 func (h *Handlers) RejectReport(c *gin.Context) {
     reportID, err := strconv.ParseInt(c.Param("id"), 10, 64)
     if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "invalid report id"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "invalid_report_id")})
         return
     }
     res, err := h.db.Exec(`UPDATE expense_reports SET status = 'rejected' WHERE id = ? AND status = 'submitted'`, reportID)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "database_error")})
         return
     }
     count, _ := res.RowsAffected()
     if count == 0 {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "report not found or not in submitted state"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "report_not_found_or_not_in_submitted_state")})
         return
     }
     c.JSON(http.StatusOK, gin.H{"id": reportID, "status": "rejected"})
@@ -535,7 +536,7 @@ func (h *Handlers) RejectReport(c *gin.Context) {
 func (h *Handlers) ListUsers(c *gin.Context) {
     rows, err := h.db.Query("SELECT id, email, created_at FROM users")
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "database_error")})
         return
     }
     defer rows.Close()
@@ -543,7 +544,7 @@ func (h *Handlers) ListUsers(c *gin.Context) {
     for rows.Next() {
         var u User
         if err := rows.Scan(&u.ID, &u.Email, &u.CreatedAt); err != nil {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+            c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "database_error")})
             return
         }
         users = append(users, u)
@@ -562,31 +563,31 @@ type CreateUserRequest struct {
 func (h *Handlers) CreateUser(c *gin.Context) {
     var req CreateUserRequest
     if err := c.ShouldBindJSON(&req); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "invalid_json")})
         return
     }
     if req.Email == "" || req.Password == "" {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "email and password are required"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "email_and_password_are_required")})
         return
     }
     // Hash password
     hashed, err := hashPassword(req.Password)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to hash password"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "failed_to_hash_password")})
         return
     }
     tx, err := h.db.Begin()
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to begin transaction"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "failed_to_begin_transaction")})
         return
     }
     defer tx.Rollback()
     res, err := tx.Exec("INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)", req.Email, hashed, time.Now().UTC())
     if err != nil {
         if strings.Contains(err.Error(), "UNIQUE") {
-            c.JSON(http.StatusConflict, gin.H{"error": "email already exists"})
+            c.JSON(http.StatusConflict, gin.H{"error": GetMsg(c, "email_already_exists")})
         } else {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
+            c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "failed_to_create_user")})
         }
         return
     }
@@ -595,12 +596,12 @@ func (h *Handlers) CreateUser(c *gin.Context) {
     for _, gid := range req.Groups {
         _, err := tx.Exec("INSERT INTO user_groups (user_id, group_id) VALUES (?, ?)", userID, gid)
         if err != nil {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to assign groups"})
+            c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "failed_to_assign_groups")})
             return
         }
     }
     if err := tx.Commit(); err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to commit transaction"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "failed_to_commit_transaction")})
         return
     }
     c.JSON(http.StatusCreated, gin.H{"id": userID, "email": req.Email})
@@ -610,7 +611,7 @@ func (h *Handlers) CreateUser(c *gin.Context) {
 func (h *Handlers) ListGroups(c *gin.Context) {
     rows, err := h.db.Query("SELECT id, name FROM groups")
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "database_error")})
         return
     }
     defer rows.Close()
@@ -618,7 +619,7 @@ func (h *Handlers) ListGroups(c *gin.Context) {
     for rows.Next() {
         var g Group
         if err := rows.Scan(&g.ID, &g.Name); err != nil {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+            c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "database_error")})
             return
         }
         groups = append(groups, g)
@@ -635,15 +636,15 @@ type CreateGroupRequest struct {
 func (h *Handlers) CreateGroup(c *gin.Context) {
     var req CreateGroupRequest
     if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.Name) == "" {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "name is required"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "name_is_required")})
         return
     }
     res, err := h.db.Exec("INSERT INTO groups (name) VALUES (?)", req.Name)
     if err != nil {
         if strings.Contains(err.Error(), "UNIQUE") {
-            c.JSON(http.StatusConflict, gin.H{"error": "group name already exists"})
+            c.JSON(http.StatusConflict, gin.H{"error": GetMsg(c, "group_name_already_exists")})
         } else {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create group"})
+            c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "failed_to_create_group")})
         }
         return
     }
@@ -660,17 +661,17 @@ type AssignPermissionsRequest struct {
 func (h *Handlers) AssignPermissions(c *gin.Context) {
     groupID, err := strconv.ParseInt(c.Param("id"), 10, 64)
     if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "invalid group id"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "invalid_group_id")})
         return
     }
     var req AssignPermissionsRequest
     if err := c.ShouldBindJSON(&req); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "invalid_json")})
         return
     }
     tx, err := h.db.Begin()
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to begin transaction"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "failed_to_begin_transaction")})
         return
     }
     defer tx.Rollback()
@@ -678,12 +679,12 @@ func (h *Handlers) AssignPermissions(c *gin.Context) {
         // Upsert assignment
         _, err := tx.Exec("INSERT OR IGNORE INTO group_permissions (group_id, permission_id) VALUES (?, ?)", groupID, pid)
         if err != nil {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to assign permissions"})
+            c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "failed_to_assign_permissions")})
             return
         }
     }
     if err := tx.Commit(); err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to commit transaction"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "failed_to_commit_transaction")})
         return
     }
     c.JSON(http.StatusOK, gin.H{"group_id": groupID, "permission_ids": req.PermissionIDs})
@@ -694,7 +695,7 @@ func (h *Handlers) AssignPermissions(c *gin.Context) {
 func (h *Handlers) GenerateAPIToken(c *gin.Context) {
     userID, err := strconv.ParseInt(c.Param("id"), 10, 64)
     if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+        c.JSON(http.StatusBadRequest, gin.H{"error": GetMsg(c, "invalid_user_id")})
         return
     }
     // Create table if not exists
@@ -706,18 +707,18 @@ func (h *Handlers) GenerateAPIToken(c *gin.Context) {
         FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
     )`)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create table"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "failed_to_create_table")})
         return
     }
     // Generate random 32-byte token encoded in hex
     b := make([]byte, 32)
     if _, err := rand.Read(b); err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "failed_to_generate_token_for_api")})
         return
     }
     token := fmt.Sprintf("%x", b)
     if _, err := h.db.Exec("INSERT INTO api_tokens (user_id, token, created_at) VALUES (?, ?, ?)", userID, token, time.Now().UTC()); err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to store token"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "failed_to_store_token")})
         return
     }
     c.JSON(http.StatusOK, gin.H{"user_id": userID, "token": token})
@@ -735,7 +736,7 @@ func (h *Handlers) ExportCSV(c *gin.Context) {
         FROM expense_reports er
         LEFT JOIN expense_items ei ON ei.report_id = er.id`)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "database_error")})
         return
     }
     defer rows.Close()
@@ -745,7 +746,7 @@ func (h *Handlers) ExportCSV(c *gin.Context) {
         var expenseDate sql.NullString
         var amountHT, amountTTC, vatRate sql.NullFloat64
         if err := rows.Scan(&reportID, &userID, &title, &status, &itemID, &description, &expenseDate, &amountHT, &amountTTC, &vatRate, &receiptPath); err != nil {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+            c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "database_error")})
             return
         }
         record := []string{
@@ -772,7 +773,7 @@ func (h *Handlers) ExportJSON(c *gin.Context) {
         FROM expense_reports er
         LEFT JOIN expense_items ei ON ei.report_id = er.id`)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "database_error")})
         return
     }
     defer rows.Close()
@@ -800,7 +801,7 @@ func (h *Handlers) ExportJSON(c *gin.Context) {
         var expenseDate sql.NullString
         var amountHT, amountTTC, vatRate sql.NullFloat64
         if err := rows.Scan(&reportID, &userID, &title, &status, &itemID, &description, &expenseDate, &amountHT, &amountTTC, &vatRate, &receiptPath); err != nil {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+            c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "database_error")})
             return
         }
         r, ok := reportMap[reportID.Int64]
@@ -848,7 +849,7 @@ func (h *Handlers) ExportYAML(c *gin.Context) {
         FROM expense_reports er
         LEFT JOIN expense_items ei ON ei.report_id = er.id`)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "database_error")})
         return
     }
     defer rows.Close()
@@ -875,7 +876,7 @@ func (h *Handlers) ExportYAML(c *gin.Context) {
         var expenseDate sql.NullString
         var amountHT, amountTTC, vatRate sql.NullFloat64
         if err := rows.Scan(&reportID, &userID, &title, &status, &itemID, &description, &expenseDate, &amountHT, &amountTTC, &vatRate, &receiptPath); err != nil {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+            c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "database_error")})
             return
         }
         r, ok := reportMap[reportID.Int64]
@@ -911,7 +912,7 @@ func (h *Handlers) ExportYAML(c *gin.Context) {
     // Marshal to YAML
     out, err := yaml.Marshal(reports)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to marshal YAML"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": GetMsg(c, "failed_to_marshal_yaml")})
         return
     }
     c.Header("Content-Type", "application/x-yaml")

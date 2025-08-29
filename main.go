@@ -32,6 +32,10 @@ func main() {
     if err := InitDB(db); err != nil {
         log.Fatalf("failed to init database: %v", err)
     }
+    // Load translations
+    if err := LoadTranslations("i18n"); err != nil {
+        log.Fatalf("failed to load translations: %v", err)
+    }
     // Create handlers
     handlers := NewHandlers(db, datadir)
     r := gin.Default()
