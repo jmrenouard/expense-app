@@ -1,6 +1,6 @@
-[![Buy Us A Coffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/jmrenouard)
-
 # Expense App
+
+[![Buy Us A Coffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/jmrenouard)
 
 A simple expense tracking application built with Go and Svelte.
 
