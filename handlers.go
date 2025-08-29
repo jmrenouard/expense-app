@@ -245,7 +245,7 @@ type AddItemRequest struct {
 
 // AddItem adds an expense item to a report.
 func (h *Handlers) AddItem(c *gin.Context) {
-    reportID, err := strconv.ParseInt(c.Param("report_id"), 10, 64)
+    reportID, err := strconv.ParseInt(c.Param("id"), 10, 64)
     if err != nil {
         c.JSON(http.StatusBadRequest, gin.H{"error": "invalid report id"})
         return
