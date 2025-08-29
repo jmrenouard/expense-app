@@ -4,17 +4,30 @@ A simple expense tracking application built with Go and Svelte.
 
 ## Getting Started
 
-To get the application running locally, you'll need to have Docker and Docker Compose installed.
+To get the application running locally, you'll need to have Docker installed. You can also use the provided `Makefile` to simplify the process.
 
 1.  **Build and run the application:**
 
     ```bash
-    docker-compose up --build
+    make run
     ```
 
 2.  **Access the application:**
 
     The application will be available at `http://localhost:8080`.
+
+## Makefile Commands
+
+The `Makefile` provides several commands to manage the application lifecycle:
+
+*   `make build`: Builds the Docker image for the application.
+*   `make run`: Starts the application in a Docker container.
+*   `make stop`: Stops and removes the application container.
+*   `make logs`: Tails the logs of the application container.
+*   `make clean`: Stops the container and removes the Docker image.
+*   `make test`: Runs both unit and functional tests.
+*   `make test-unit`: Runs only the unit tests.
+*   `make test-functional`: Runs only the functional tests.
 
 ## Configuration
 
