@@ -1,5 +1,5 @@
 # Étape 1: Construire l'application Go
-FROM golang:1.20-alpine AS builder
+FROM golang:1.20-alpine3.17 AS builder
 
 # Installer git et les outils de construction C
 RUN apk add --no-cache git gcc musl-dev
