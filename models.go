@@ -4,6 +4,7 @@ import (
     "database/sql"
     "errors"
     "fmt"
+    "os"
     "time"
 )
 
@@ -225,8 +226,8 @@ func seedPermissionsAndGroups(db *sql.DB) error {
 }
 
 // seedSuperAdmin ensures that at least one user exists. If none, it creates a default super admin
-// user and assigns them to the Administrateurs group. The default credentials are defined here and
-// should be changed immediately after first login.
+// user and assigns them to the Administrateurs group. The default credentials are read from
+// environment variables ADMIN_EMAIL and ADMIN_PASSWORD, with fallbacks.
 func seedSuperAdmin(db *sql.DB) error {
     var count int
     if err := db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count); err != nil {
@@ -235,9 +236,15 @@ func seedSuperAdmin(db *sql.DB) error {
     if count > 0 {
         return nil
     }
-    // Create default super admin user
-    email := "admin@example.com"
-    password := "admin"
+	// Create default super admin user from env or fall back to defaults
+	email := os.Getenv("ADMIN_EMAIL")
+	if email == "" {
+		email = "admin@example.com"
+	}
+	password := os.Getenv("ADMIN_PASSWORD")
+	if password == "" {
+		password = "admin"
+	}
     // Hash password using bcrypt
     hash, err := hashPassword(password)
     if err != nil {

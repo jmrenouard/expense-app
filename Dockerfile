@@ -1,8 +1,8 @@
 # Étape 1: Construire l'application Go
 FROM golang:1.20-alpine AS builder
 
-# Installer git
-RUN apk add --no-cache git
+# Installer git et les outils de construction C
+RUN apk add --no-cache git gcc musl-dev
 
 WORKDIR /app
 
@@ -14,7 +14,7 @@ RUN go mod tidy
 RUN go mod vendor
 
 # Construire l'exécutable Go en utilisant les dépendances vendored
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -a -installsuffix cgo -o /app/expenseapp .
+RUN CGO_ENABLED=1 GOOS=linux go build -mod=vendor -a -installsuffix cgo -o /app/expenseapp .
 
 # Étape 2: Créer l'image finale avec Nginx
 FROM nginx:alpine
