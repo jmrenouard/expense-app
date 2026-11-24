@@ -2,60 +2,83 @@
 
 [![Buy Us A Coffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/jmrenouard)
 
-A simple expense tracking application built with Go and Svelte.
+A lightweight expense tracking application built with a Go REST API (`Gin` + `SQLite` via `go-sqlite3`), an Nginx reverse proxy, and a Vanilla JavaScript + Tailwind CSS frontend (`frontend/`).
+
+## Documentation Portals
+
+- **English Diátaxis Documentation**: [docs/index.md](docs/index.md) ([Tutorials](docs/01-tutorials/index.md) | [How-To Guides](docs/02-how-to-guides/index.md) | [Reference](docs/03-reference/index.md) | [Explanation](docs/04-explanation/index.md)) — [Technical Specifications](SPECIFICATIONS.md)
+- **Documentation Diátaxis en français** : [docs/fr/index.md](docs/fr/index.md) ([Tutoriels](docs/fr/01-tutoriels/index.md) | [Guides pratiques](docs/fr/02-guides-pratiques/index.md) | [Référence](docs/fr/03-reference/index.md) | [Explications](docs/fr/04-explications/index.md)) — [Spécifications techniques](SPECIFICATIONS_FR.md)
+
+## Architecture
+
+```mermaid
+flowchart LR
+  Browser["Browser (Vanilla JS + Tailwind CDN)"] -->|HTTP :8080| Nginx["Nginx Reverse Proxy"]
+  Nginx -->|Static Assets /| HTML["/usr/share/nginx/html"]
+  Nginx -->|Proxy /api/| API["Go Gin API (:8081 in container, :8080 standalone)"]
+  API --> DB["SQLite (DATADIR/expense.db)"]
+  API --> Receipts["Receipts (DATADIR/{user_id}/receipts/)"]
+```
 
 ## Getting Started
 
-To get the application running locally, you'll need to have Docker installed. You can also use the provided `Makefile` to simplify the process.
+Run the containerized stack with Docker and `Makefile`, or launch the Go server directly on your host.
 
-1.  **Build and run the application:**
+### Option A: Docker Container (Recommended)
 
-    ```bash
-    make run
-    ```
+1. Build and start the container (`Nginx` listens on `:8080` and forwards `/api/` to Go on `:8081`):
 
-2.  **Access the application:**
+   ```bash
+   make build
+   make run
+   ```
 
-    The application will be available at `http://localhost:8080`.
+2. Open `http://localhost:8080` in your browser and sign in with the configured super-admin credentials.
+
+### Option B: Run Standalone Go Backend
+
+```bash
+go mod download
+CGO_ENABLED=1 go run .
+```
+
+When started outside Docker, `main.go` listens directly on `:8080` (`PORT` defaults to `8080`) and initializes `./data/expense.db`.
 
 ## Makefile Commands
 
-The `Makefile` provides several commands to manage the application lifecycle:
-
-*   `make build`: Builds the Docker image for the application.
-*   `make run`: Starts the application in a Docker container.
-*   `make stop`: Stops and removes the application container.
-*   `make logs`: Tails the logs of the application container.
-*   `make clean`: Stops the container and removes the Docker image.
-*   `make test`: Runs both unit and functional tests.
-*   `make test-unit`: Runs only the unit tests.
-*   `make test-functional`: Runs only the functional tests.
+| Target | Action |
+| --- | --- |
+| `make build` | Build the `expenseapp` Docker image (`Dockerfile`). |
+| `make run` | Start container `expenseapp` publishing `8080:8080` and mounting `$(PWD)/data:/data`. |
+| `make stop` | Stop and remove the `expenseapp` container. |
+| `make logs` | Stream container logs. |
+| `make clean` | Stop the container and remove the `expenseapp` Docker image. |
+| `make test` | Run unit tests and containerized functional tests. |
+| `make test-unit` | Run `go test -v .`. |
+| `make test-functional` | Build app + test images (`tests/Dockerfile`) and verify `POST /api/auth/login`. |
 
 ## Configuration
 
-The application can be configured using environment variables.
-
-| Variable           | Description                                                                                                | Default               |
-| ------------------ | ---------------------------------------------------------------------------------------------------------- | --------------------- |
-| `PORT`             | The port on which the Go backend server will listen.                                                       | `8081`                |
-| `DATADIR`          | The directory where the SQLite database and other data will be stored.                                     | `./data`              |
-| `JWT_SECRET`       | The secret key used to sign JSON Web Tokens.                                                               | `secret`              |
-| `ADMIN_EMAIL`      | The email for the initial super admin user, created on first run.                                          | `admin@example.com`   |
-| `ADMIN_PASSWORD`   | The password for the initial super admin user. **It is strongly recommended to change this.**                | `admin`               |
+| Variable | Description | Standalone Default (`main.go`) | Docker Default (`Dockerfile`) |
+| --- | --- | --- | --- |
+| `PORT` | TCP listening port for the Go HTTP server. | `8080` | `8081` (proxied via Nginx `:8080`) |
+| `DATADIR` | Directory storing `expense.db` and uploaded receipt files. | `./data` | `/data` |
+| `JWT_SECRET` | HMAC secret key used to sign JWTs (`HS256`, 24h expiry). Change in production. | `secret` | `secret` |
+| `ADMIN_EMAIL` | Email for the initial seeded `Administrateurs` account (`users` empty). | `admin@example.com` | `admin@example.com` |
+| `ADMIN_PASSWORD` | Password for the initial seeded super-admin account. Change immediately. | `admin` | `admin` |
 
 ### Example with `docker run`
 
-You can also run the application without Docker Compose by passing the environment variables directly to the `docker run` command.
-
 ```bash
+docker build -t expenseapp:latest .
 docker run -d \
   -p 8080:8080 \
+  -e PORT=8081 \
+  -e DATADIR=/data \
   -e ADMIN_EMAIL=myadmin@example.com \
-  -e ADMIN_PASSWORD=supersecretpassword \
-  -e JWT_SECRET=anothersecret \
+  -e ADMIN_PASSWORD=replace-with-strong-password \
+  -e JWT_SECRET=replace-with-strong-jwt-secret \
   -v $(pwd)/data:/data \
   --name expense-app \
-  expense-app:latest
+  expenseapp:latest
 ```
-
-**Note:** You would first need to build the image, for example with `docker build -t expense-app:latest .`.

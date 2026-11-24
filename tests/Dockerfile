@@ -2,14 +2,12 @@ FROM golang:1.20-alpine
 
 WORKDIR /app
 
-# Copy test files
-COPY . .
+# Copy Go module manifests and fetch dependencies
+COPY go.mod go.sum ./
+RUN go mod download
 
-# Copy go.mod from parent directory
-COPY ../go.mod .
+# Copy functional test suite
+COPY tests/ ./tests/
 
-# Install dependencies
-RUN go mod tidy
-
-# Run the tests
-CMD ["go", "test", "-v", "."]
+# Run functional tests against the running app container
+CMD ["go", "test", "-v", "./tests"]

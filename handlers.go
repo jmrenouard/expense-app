@@ -580,7 +580,9 @@ func (h *Handlers) CreateUser(c *gin.Context) {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to begin transaction"})
         return
     }
-    defer tx.Rollback()
+    defer func() {
+        _ = tx.Rollback()
+    }()
     res, err := tx.Exec("INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)", req.Email, hashed, time.Now().UTC())
     if err != nil {
         if strings.Contains(err.Error(), "UNIQUE") {
@@ -673,7 +675,9 @@ func (h *Handlers) AssignPermissions(c *gin.Context) {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to begin transaction"})
         return
     }
-    defer tx.Rollback()
+    defer func() {
+        _ = tx.Rollback()
+    }()
     for _, pid := range req.PermissionIDs {
         // Upsert assignment
         _, err := tx.Exec("INSERT OR IGNORE INTO group_permissions (group_id, permission_id) VALUES (?, ?)", groupID, pid)
@@ -729,7 +733,10 @@ func (h *Handlers) ExportCSV(c *gin.Context) {
     c.Header("Content-Disposition", "attachment; filename=expenses.csv")
     w := csv.NewWriter(c.Writer)
     // Write header
-    w.Write([]string{"report_id", "user_id", "title", "status", "item_id", "description", "expense_date", "amount_ht", "amount_ttc", "vat_rate", "receipt_path"})
+    if err := w.Write([]string{"report_id", "user_id", "title", "status", "item_id", "description", "expense_date", "amount_ht", "amount_ttc", "vat_rate", "receipt_path"}); err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to write CSV header"})
+        return
+    }
     // Query all
     rows, err := h.db.Query(`SELECT er.id, er.user_id, er.title, er.status, ei.id, ei.description, ei.expense_date, ei.amount_ht, ei.amount_ttc, ei.vat_rate, ei.receipt_path
         FROM expense_reports er
@@ -761,9 +768,15 @@ func (h *Handlers) ExportCSV(c *gin.Context) {
             fmt.Sprintf("%.2f", vatRate.Float64),
             receiptPath.String,
         }
-        w.Write(record)
+        if err := w.Write(record); err != nil {
+            c.AbortWithStatus(http.StatusInternalServerError)
+            return
+        }
     }
     w.Flush()
+    if err := w.Error(); err != nil {
+        c.AbortWithStatus(http.StatusInternalServerError)
+    }
 }
 
 // ExportJSON exports all expenses to JSON.
