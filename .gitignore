@@ -17,8 +17,8 @@ coverage.*
 *.coverprofile
 profile.cov
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
+# Local SQLite runtime data
+data/
 
 # Go workspace file
 go.work
@@ -27,6 +27,7 @@ go.work.sum
 # env file
 .env
 
-# Editor/IDE
-# .idea/
-# .vscode/
+# Python bytecode caches
+__pycache__/
+*.py[cod]
+.pytest_cache/

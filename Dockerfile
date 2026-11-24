@@ -1,47 +1,47 @@
-# Étape 1: Construire l'application Go
+# Stage 1: Build the Go backend binary
 FROM golang:1.20-alpine3.17 AS builder
 
-# Installer git et les outils de construction C
+# Install git and C build tools for go-sqlite3 CGO compilation
 RUN apk add --no-cache git gcc musl-dev
 
 WORKDIR /app
 
-# Copier tous les fichiers sources
+# Copy all source files
 COPY . .
 
-# Télécharger les dépendances et les vendorer
+# Download and vendor Go dependencies
 RUN go mod tidy
 RUN go mod vendor
 
-# Construire l'exécutable Go en utilisant les dépendances vendored
+# Build the Go binary using vendored dependencies
 RUN CGO_ENABLED=1 GOOS=linux go build -mod=vendor -a -installsuffix cgo -o /app/expenseapp .
 
-# Étape 2: Créer l'image finale avec Nginx
+# Stage 2: Create the final Nginx runtime image
 FROM nginx:alpine
 
-# Copier l'exécutable Go depuis l'étape de construction
+# Copy the Go binary from the builder stage
 COPY --from=builder /app/expenseapp /usr/local/bin/expenseapp
 
-# Copier le répertoire frontend
+# Copy static frontend assets
 COPY --from=builder /app/frontend /usr/share/nginx/html
 
-# Créer un répertoire pour les données de l'application
+# Create the persistent data directory
 RUN mkdir /data
 
-# Définir les variables d'environnement pour l'application Go
+# Configure backend environment variables inside container
 ENV PORT=8081
 ENV DATADIR=/data
 
-# Supprimer la configuration Nginx par défaut
+# Remove default Nginx virtual host configuration
 RUN rm /etc/nginx/conf.d/default.conf
 
-# Créer un script de démarrage
+# Create container entrypoint script
 RUN echo '#!/bin/sh' > /entrypoint.sh && \
     echo '/usr/local/bin/expenseapp &' >> /entrypoint.sh && \
     echo 'nginx -g "daemon off;"' >> /entrypoint.sh && \
     chmod +x /entrypoint.sh
 
-# Créer la configuration Nginx
+# Create Nginx reverse proxy configuration forwarding /api/ to Go backend
 RUN echo 'server {' > /etc/nginx/conf.d/app.conf && \
     echo '    listen 8080;' >> /etc/nginx/conf.d/app.conf && \
     echo '    server_name localhost;' >> /etc/nginx/conf.d/app.conf && \
@@ -59,6 +59,6 @@ RUN echo 'server {' > /etc/nginx/conf.d/app.conf && \
     echo '    }' >> /etc/nginx/conf.d/app.conf && \
     echo '}' >> /etc/nginx/conf.d/app.conf
 
-# Exposer le port et définir la commande de démarrage
+# Expose HTTP port and start entrypoint
 EXPOSE 8080
 CMD ["/entrypoint.sh"]

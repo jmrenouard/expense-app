@@ -1,36 +1,36 @@
-# Nom de l'image Docker
+# Docker image name
 IMAGE_NAME = expenseapp
 
-# Commande par défaut
+# Default target
 all: build
 
-# Construire l'image Docker
+# Build Docker image
 build:
 	docker build -t $(IMAGE_NAME) .
 
-# Lancer le conteneur Docker
+# Run Docker container
 run:
 	docker run -d -p 8080:8080 --name $(IMAGE_NAME) -v $(PWD)/data:/data $(IMAGE_NAME)
 
-# Arrêter et supprimer le conteneur Docker
+# Stop and remove Docker container
 stop:
 	docker stop $(IMAGE_NAME) || true
 	docker rm $(IMAGE_NAME) || true
 
-# Afficher les logs du conteneur
+# Tail container logs
 logs:
 	docker logs -f $(IMAGE_NAME)
 
-# Nettoyer : arrêter le conteneur et supprimer l'image
+# Stop container and remove Docker image
 clean: stop
 	docker rmi $(IMAGE_NAME) || true
 
-# Lancer les tests unitaires
+# Run Go unit tests
 test-unit:
 	@echo "Running unit tests..."
 	go test -v .
 
-# Lancer les tests fonctionnels
+# Run containerized functional tests
 test-functional: build
 	@echo "--> Running functional tests..."
 	@sh -c ' \
@@ -55,7 +55,7 @@ test-functional: build
 		echo "    Functional tests passed."; \
 	'
 
-# Lancer tous les tests
+# Run all unit and functional tests
 test: test-unit test-functional
 
 .PHONY: all build run stop logs clean test-unit test-functional test

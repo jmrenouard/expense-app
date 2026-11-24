@@ -1,13 +1,15 @@
-# Ignorer le répertoire de données
+# Ignore local data directory
 data/
 
-# Ignorer le répertoire Git
+# Ignore version control directory
 .git/
 
-# Ignorer les fichiers de build et de développement local
+# Ignore local build/dev files and caches
 Makefile
 .dockerignore
 *.log
+__pycache__/
+*.py[cod]
 
-# Ignorer les fichiers spécifiques à l'OS
+# Ignore OS-specific files
 .DS_Store

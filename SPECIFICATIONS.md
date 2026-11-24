@@ -1,184 +1,165 @@
-# **Detailed Functional & Technical Specifications (DFTS)**
+# Detailed Functional & Technical Specifications (DFTS)
 
-## **Expense Report Management Application**
+For task-oriented documentation and operational runbooks, browse the [English Diátaxis Portal](docs/index.md). For the French version, see [SPECIFICATIONS_FR.md](SPECIFICATIONS_FR.md).
 
-### **1\. Introduction and Objectives**
+## Expense Report Management Application
 
-#### **1.1. Project Context**
+### 1. Introduction and Objectives
 
-This document aims to define the functional and technical specifications for the development of a web application for managing expense reports. The application must be simple, performant, secure, and designed to be scalable.
+#### 1.1. Project Context
 
-#### **1.2. Main Objectives**
+This document defines the functional and technical specifications for the Expense Report Management web application (`expenseapp`). It reconciles original requirements against the current Go, SQLite, Nginx, and Vanilla JavaScript implementation.
 
-* **Simplify Data Entry:** Allow users to quickly create expense reports.  
-* **Centralize Receipts:** Link a photo of the receipt to each expense.  
-* **Ensure Traceability:** Calculate and store amounts with and without tax, as well as VAT.  
-* **Manage Permissions Precisely:** Secure access via a system of groups and granular permissions.  
-* **Implement a Workflow:** Manage the lifecycle of an expense report (draft, submission, validation).  
-* **Allow Interoperability:** Offer the ability to export data in multiple formats (PDF, CSV, JSON, YAML).
+#### 1.2. Main Objectives
 
-### **2\. Functional Specifications**
+* **Simplify Data Entry:** Allow users to create draft expense reports and attach itemized expenses.
+* **Centralize Receipts:** Store uploaded receipt attachments per user under `DATADIR/{user_id}/receipts/`.
+* **Ensure Traceability:** Compute and store tax-excluded (`amount_ht`), VAT (`vat_rate`), and tax-included (`amount_ttc = amount_ht * (1 + vat_rate)`) totals.
+* **Enforce Group RBAC:** Guard all protected endpoints with group-based permissions (`RequirePermission`).
+* **Manage Approval Workflow:** Track expense reports across `draft`, `submitted`, `approved`, and `rejected` states.
+* **Provide Structured Exports:** Export reports via CSV, JSON, and YAML endpoints (PDF export remains on the roadmap).
 
-#### **2.1. User Journeys (User Stories)**
+### 2. Functional Specifications
 
-* **As a standard user,** I want to manage all my expense reports (create, modify, delete as long as they are in draft) and submit them for validation.  
-* **As a validator,** I want to be able to view and validate (approve or reject) the expense reports submitted by users within my scope.  
-* **As a Super Administrator,** I am the first user of the system. I want to be able to create other users, create groups, and assign specific permissions to those groups.  
-* **As a user,** I want to be able to export my validated expense reports in PDF format.  
-* **As an administrator,** I want to be able to export a global report of expenses in different formats for analysis or integration.  
-* **As a mobile user,** I want to be able to install the application on my smartphone for quick access.
+#### 2.1. User Journeys
 
-#### **2.2. Feature Description**
+* **Standard User (`Utilisateurs`):** Create, edit, attach receipts to, submit, and delete own `draft` expense reports (`reports:create`, `reports:update:own`, `reports:read:own`).
+* **Validator (`Validateurs`):** List non-draft reports and approve or reject submitted reports (`reports:read:all`, `reports:approve`, `reports:reject`).
+* **Super Administrator (`Administrateurs`):** Manage users, groups, group permissions, static token generation, and global exports (holds all `13` permissions).
 
-#### **2.2.1. Validation Workflow and Statuses**
+#### 2.2. Feature Description
 
-The status field in the EXPENSE\_REPORTS table will follow this lifecycle:  
-Draft \-\> Submitted \-\> Approved / Rejected
+##### 2.2.1. Validation Workflow and Statuses
 
-#### **2.2.2. Predefined Groups**
+The `status` column in `expense_reports` follows this state machine enforced by `handlers.go`:
 
-To facilitate implementation, the application will be initialized with the following groups:
+```mermaid
+stateDiagram-v2
+  [*] --> draft: POST /api/reports
+  draft --> submitted: POST /api/reports/:id/submit
+  draft --> [*]: DELETE /api/reports/:id
+  submitted --> approved: POST /api/admin/reports/:id/approve
+  submitted --> rejected: POST /api/admin/reports/:id/reject
+```
 
-* **Administrators:** Access to all administration features.  
-* **Validators:** Can approve and reject expense reports.  
-* **Users:** Can create and manage their own expense reports.
+##### 2.2.2. Seeded Predefined Groups (`models.go`)
 
-#### **2.2.3. Data Export**
+`InitDB()` seeds three predefined French-named groups and `13` permissions on startup:
 
-* **PDF Export:** A user will be able to download an individual expense report in PDF format.  
-* **Exports for Integration:** An administrator will be able to export a report of all expenses over a given period in the following formats:  
-  * **CSV:** For processing in a spreadsheet.  
-  * **JSON:** For integration with modern web applications.  
-  * **YAML:** For configuration or integration with infrastructure tools.
+* **`Administrateurs`:** Assigned all `13` permissions.
+* **`Validateurs`:** Assigned `reports:read:all`, `reports:approve`, `reports:reject`.
+* **`Utilisateurs`:** Assigned `reports:create`, `reports:update:own`, `reports:read:own`.
 
-### **3\. Technical Specifications**
+##### 2.2.3. Data Export Scope
 
-#### **3.1. Architecture and Security**
+* **Implemented Admin Exports:** `GET /api/admin/export/csv`, `GET /api/admin/export/json`, and `GET /api/admin/export/yaml` (`reports:export:all`).
+* **Planned (Not Yet Implemented):** Per-report PDF export (`gofpdf`).
 
-* **Frontend (Client):** A single-page Progressive Web App (PWA) (SPA).  
-* **Backend (Server):** A REST API developed in Go (Golang).  
-* **Authentication:** The API will use JSON Web Tokens (JWT) for interactive sessions and static tokens for programmatic (API) access.  
-* **Passwords:** User passwords will be hashed using the **bcrypt** algorithm.
+### 3. Technical Specifications
 
-#### **3.1.1. Rights and Permissions Management**
+#### 3.1. Architecture and Security
 
-The rights system will be based on groups, not individual users.
+* **Frontend (`frontend/`):** Vanilla JavaScript (`ES6+`) SPA styled via Tailwind CSS CDN (`frontend/index.html`, `frontend/main.js`). Workbox offline PWA support is a roadmap item.
+* **Backend (`main.go`, `handlers.go`):** Go `1.20+` Gin REST API listening on `:8080` directly or `:8081` behind Nginx (`Dockerfile`).
+* **Authentication (`auth.go`, `middleware.go`):** Signed `HS256` JWTs (`24h` TTL) via `Authorization: Bearer <token>`. Note: `POST /api/admin/users/:id/token` generates hex keys in `api_tokens`, while `AuthMiddleware` currently rejects `X-API-Key` with `401 {"error": "API keys not supported"}` until lookup middleware is wired.
+* **Passwords:** Hashed using `bcrypt.DefaultCost` (`golang.org/x/crypto/bcrypt`).
 
-* **Permissions:** Atomic and explicit permissions will be defined in the code (e.g., reports:approve, users:create, groups:manage).  
-* **Groups:** A group is a container for permissions.  
-* **Users:** A user is assigned one or more groups. Their rights are the union of all permissions from the groups they belong to.  
-* **Verification Middleware:** Each sensitive API route will be protected by middleware that checks if the authenticated user (via their token) has the required permission to perform the action.
+##### 3.1.1. Receipts Storage and `DATADIR`
 
-#### **3.1.2. Super Administrator Account**
+* **Data Directory (`DATADIR`):** Configurable via `DATADIR` env var (defaults to `./data` standalone, `/data` in Docker). Stores `expense.db`.
+* **Structure:** `DATADIR/{user_id}/receipts/{item_id}{ext}` (lowercase extension preserved).
+* **Database Column:** `expense_items.receipt_path` stores only `{item_id}{ext}`; `GET /api/items/:id/receipt` reconstructs the path after checking ownership or `reports:read:all`.
 
-A single Super Administrator account will be created on the application's first launch (or via a setup command). This account is the only one that can initially manage groups and assign permissions.
+#### 3.2. Database Schema (SQLite)
 
-#### **3.1.3. Receipts Storage and datadir**
+```mermaid
+erDiagram
+    USERS {
+        int id PK
+        string email
+        string password_hash
+        datetime created_at
+    }
+    GROUPS {
+        int id PK
+        string name
+    }
+    PERMISSIONS {
+        int id PK
+        string action
+    }
+    USER_GROUPS {
+        int user_id PK
+        int group_id PK
+    }
+    GROUP_PERMISSIONS {
+        int group_id PK
+        int permission_id PK
+    }
+    EXPENSE_REPORTS {
+        int id PK
+        int user_id FK
+        string title
+        string status
+        datetime created_at
+    }
+    EXPENSE_ITEMS {
+        int id PK
+        int report_id FK
+        string description
+        date expense_date
+        float amount_ht
+        float amount_ttc
+        float vat_rate
+        string receipt_path
+        datetime created_at
+    }
+    USERS ||--|{ USER_GROUPS : "belongs to"
+    GROUPS ||--|{ USER_GROUPS : "contains"
+    GROUPS ||--|{ GROUP_PERMISSIONS : "has"
+    PERMISSIONS ||--|{ GROUP_PERMISSIONS : "assigned to"
+    USERS ||--o{ EXPENSE_REPORTS : "creates"
+    EXPENSE_REPORTS ||--o{ EXPENSE_ITEMS : "contains"
+```
 
-* **Data Directory (datadir):** A configurable main directory (e.g., **/var/data/expense-app**) will contain all persistent data.  
-* **User Isolation:** Inside the datadir, receipts will be isolated in subdirectories per user for better organization and security.  
-* **Structure:** **datadir/{user\_id}/receipts/**  
-* **File Naming:** Each uploaded receipt will be renamed using the expense item's unique identifier (**expense\_item\_id**) followed by its original extension (.jpg, .png, etc.).  
-* **Example:** **datadir/101/receipts/54321.jpg**  
-* **Database Path:** The **receipt\_path** field in the **EXPENSE\_ITEMS** table will only store the filename (e.g., 54321.jpg). The application logic will be responsible for reconstructing the full path.
+#### 3.3. REST API (Implemented Endpoints in `main.go`)
 
-#### **3.2. Database Schema (SQLite)**
+| Category | HTTP Method | Path | Handler | Required Permission |
+| --- | --- | --- | --- | --- |
+| **Authentication** | `POST` | `/api/auth/login` | `Login` | Public |
+| **Reports** | `POST` | `/api/reports` | `CreateReport` | `reports:create` |
+| **Reports** | `GET` | `/api/reports` | `ListOwnReports` | `reports:read:own` |
+| **Reports** | `POST` | `/api/reports/:id/submit` | `SubmitReport` | `reports:update:own` |
+| **Reports** | `DELETE` | `/api/reports/:id` | `DeleteReport` | `reports:update:own` |
+| **Items & Receipts** | `POST` | `/api/reports/:id/items` | `AddItem` | `reports:create` |
+| **Items & Receipts** | `PUT` | `/api/items/:id` | `UpdateItem` | `reports:update:own` |
+| **Items & Receipts** | `POST` | `/api/items/:id/receipt` | `UploadReceipt` | `reports:update:own` |
+| **Items & Receipts** | `GET` | `/api/items/:id/receipt` | `GetReceipt` | `reports:read:own` (+ `reports:read:all` for non-owners) |
+| **Administration** | `GET` | `/api/admin/reports` | `AdminListReports` | `reports:read:all` |
+| **Administration** | `POST` | `/api/admin/reports/:id/approve` | `ApproveReport` | `reports:approve` |
+| **Administration** | `POST` | `/api/admin/reports/:id/reject` | `RejectReport` | `reports:reject` |
+| **Administration** | `GET` | `/api/admin/users` | `ListUsers` | `users:read` |
+| **Administration** | `POST` | `/api/admin/users` | `CreateUser` | `users:create` |
+| **Administration** | `GET` | `/api/admin/groups` | `ListGroups` | `groups:read` |
+| **Administration** | `POST` | `/api/admin/groups` | `CreateGroup` | `groups:create` |
+| **Administration** | `POST` | `/api/admin/groups/:id/permissions` | `AssignPermissions` | `permissions:assign` |
+| **Administration** | `POST` | `/api/admin/users/:id/token` | `GenerateAPIToken` | `tokens:create` |
+| **Exports** | `GET` | `/api/admin/export/csv` | `ExportCSV` | `reports:export:all` |
+| **Exports** | `GET` | `/api/admin/export/json` | `ExportJSON` | `reports:export:all` |
+| **Exports** | `GET` | `/api/admin/export/yaml` | `ExportYAML` | `reports:export:all` |
 
-erDiagram  
-    USERS {  
-        int id PK  
-        string email  
-        string password\_hash  
-        datetime created\_at  
-    }  
-    GROUPS {  
-        int id PK  
-        string name Unique  
-    }  
-    PERMISSIONS {  
-        int id PK  
-        string action Unique "ex: reports:approve"  
-    }  
-    USER\_GROUPS {  
-        int user\_id PK, FK  
-        int group\_id PK, FK  
-    }  
-    GROUP\_PERMISSIONS {  
-        int group\_id PK, FK  
-        int permission\_id PK, FK  
-    }  
-    EXPENSE\_REPORTS {  
-        int id PK  
-        int user\_id FK  
-        string title  
-        string status  
-        datetime created\_at  
-    }  
-    EXPENSE\_ITEMS {  
-        int id PK  
-        int report\_id FK  
-        string description  
-        date expense\_date  
-        float amount\_ht  
-        float amount\_ttc  
-        float vat\_rate  
-        string receipt\_path  
-        datetime created\_at  
-    }  
-    USERS ||--|{ USER\_GROUPS : "belongs to"  
-    GROUPS ||--|{ USER\_GROUPS : "contains"  
-    GROUPS ||--|{ GROUP\_PERMISSIONS : "has"  
-    PERMISSIONS ||--|{ GROUP\_PERMISSIONS : "is assigned to"  
-    USERS ||--o{ EXPENSE\_REPORTS : "creates"  
-    EXPENSE\_REPORTS ||--o{ EXPENSE\_ITEMS : "contains"
+#### 3.4. Technology Stack Status
 
-#### **3.3. REST API (Main Endpoints)**
-
-| Category | HTTP Method | URL | Description | Required Permission |
-| :---- | :---- | :---- | :---- | :---- |
-| **Authentication** | POST | /api/auth/login | Log in and retrieve a JWT token. | (Public) |
-| **Expenses** | POST | /api/reports/{report\_id}/items | Add an expense to an expense report. | reports:create |
-|  | PUT | /api/items/{id} | Update expense data. | reports:update:own |
-|  | POST | /api/items/{id}/receipt | Upload or replace an expense receipt. | reports:update:own |
-|  | GET | /api/items/{id}/receipt | Retrieve the expense receipt file. | reports:read:own |
-| **Administration** | GET | /api/admin/reports | Retrieve all submitted expense reports. | reports:read:all |
-|  | POST | /api/admin/reports/{id}/approve | Approve an expense report. | reports:approve |
-|  | POST | /api/admin/reports/{id}/reject | Reject an expense report. | reports:reject |
-|  | GET | /api/admin/users | List all users. | users:read |
-|  | POST | /api/admin/users | Create a user. | users:create |
-|  | GET | /api/admin/groups | List all groups. | groups:read |
-|  | POST | /api/admin/groups | Create a group. | groups:create |
-|  | POST | /api/admin/groups/{id}/permissions | Assign a permission to a group. | permissions:assign |
-|  | POST | /api/admin/users/{id}/token | Generate a static API token for a user. | tokens:create |
-| **Exports** | GET | /api/admin/export/csv | Export all expenses as CSV. | reports:export:all |
-|  | GET | /api/admin/export/json | Export all expenses as JSON. | reports:export:all |
-|  | GET | /api/admin/export/yaml | Export all expenses as YAML. | reports:export:all |
-
-#### **3.4. Details of Technologies and Tools**
-
-| Domain | Component | Suggested Tool / Library | Role and Justification |
-| :---- | :---- | :---- | :---- |
-| **Backend** | Web Framework | Gin ([github.com/gin-gonic/gin](https://github.com/gin-gonic/gin)) | Lightweight, fast, and has a mature middleware ecosystem. |
-|  | DB Access | database/sql \+ [github.com/mattn/go-sqlite3](https://github.com/mattn/go-sqlite3) | Use of the standard Go package and a robust CGO driver. |
-|  | JWT Auth | [github.com/golang-jwt/jwt](https://github.com/golang-jwt/jwt) | Reference implementation for creating and validating JWTs. |
-|  | Password Hashing | golang.org/x/crypto/bcrypt | Official and industry-standard package for secure hashing. |
-|  | YAML Export | gopkg.in/yaml.v3 | Reference library for YAML manipulation in Go. |
-|  | PDF Export | [github.com/jung-kurt/gofpdf](https://github.com/jung-kurt/gofpdf) | Native Go library for generating PDF documents. |
-| **Frontend** | JS Framework | Vanilla JavaScript (ES6+) | Build the PWA without the complexity of a large framework. |
-|  | PWA & Offline | Workbox | Google library simplifying Service Worker management. |
-|  | CSS Styling | Tailwind CSS | "Utility-first" framework for building responsive designs. |
-|  | Layout | CSS Flexbox & Grid | Native technologies for creating complex and fluid layouts. |
-| **Tests** | Backend Tests | testing \+ [github.com/stretchr/testify](https://github.com/stretchr/testify) | Native package supplemented by testify for more readable assertions. |
-|  | End-to-End Tests | Playwright or Cypress | Powerful tools for automating browser interactions. |
-| **Tooling** | Containerization | Docker & Docker Compose | Create reproducible development and production environments. |
-|  | API Documentation | Swaggo ([github.com/swaggo/swag](https://github.com/swaggo/swag)) | Generates OpenAPI (Swagger) documentation from comments. |
-|  | Continuous Integration | GitHub Actions | For automating builds, tests, and potentially deployment. |
-
-### **4\. Project Deliverables**
-
-In addition to the application's source code, the following deliverables must be produced to ensure the quality, maintainability, and adoption of the project.  
-| Deliverable | Description | Detailed Content |  
-| :--- | :--- | :--- |  
-| Test Plan | Guarantee the quality and non-regression of the application via automated tests. | \- Unit Tests (business logic, calculations)\<br\>- Integration Tests (API endpoints, database)\<br\>- End-to-End Tests (complete user scenarios) |  
-| Technical Documentation | Allow developers to easily maintain and evolve the project. | \- API Documentation (generated via OpenAPI/Swagger)\<br\>- Installation Guide (README.md with Docker instructions)\<br\>- Architecture Documentation (this DFTS document) |  
-| User Manual | Provide clear and accessible support for the application's end-users. | \- Standard User Guide (creation, management, and submission of expense reports)\<br\>- Administrator Guide (management of users, groups, rights, and validation) |
+| Domain | Component | Tool / Library | Implementation Status |
+| --- | --- | --- | --- |
+| **Backend** | Web Framework | Gin (`github.com/gin-gonic/gin v1.9.1`) | Active (`main.go`, `handlers.go`) |
+| **Backend** | Database | `database/sql` + `go-sqlite3 v1.14.18` (CGO) | Active (`models.go`) |
+| **Backend** | JWT Auth | `github.com/golang-jwt/jwt/v5` | Active (`auth.go`, `middleware.go`) |
+| **Backend** | Password Hash | `golang.org/x/crypto/bcrypt` | Active (`auth.go`) |
+| **Backend** | YAML Export | `gopkg.in/yaml.v3` | Active (`handlers.go`) |
+| **Backend** | PDF Export | `gofpdf` (planned) | Not yet implemented |
+| **Frontend** | SPA & Styling | Vanilla JS (`ES6+`) + Tailwind CSS CDN | Active (`frontend/index.html`, `frontend/main.js`) |
+| **Frontend** | Offline PWA | Workbox (planned) | Not yet implemented |
+| **Tests** | Go & Docs Tests | `testing` + `testify` + Python `unittest` | Active (`auth_test.go`, `docs_tutorials_howtos_test.go`, `tests/`) |
+| **Tooling** | Containers & CI | Docker, Nginx proxy, Make, GitHub Actions | Active (`Dockerfile`, `ci.yml`, `lint.yml`) |
+| **Tooling** | OpenAPI Spec | Swaggo (planned) | Not yet implemented |
